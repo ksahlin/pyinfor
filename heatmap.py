@@ -19,18 +19,38 @@ import scipy.spatial.distance as dist
 from matplotlib import mpl
 
 #def heatmap(x, colside_colors=None, rowside_colors=None):
-def heatmap():
+def heatmap(x=None, **kwds):
     """
     x is a m by n ndarray, m observations, n genes
+
+    ### kwds:
+
+    dendrogram : ["both"|"row"|"column"|"none"]
+    scale      : ["none"|"row"|"column"]
+    cmap/colors: pylab.cm.YlGnBu
+    cellnote   : None
+    notecolor  : "black"
+    colside_colors = None,
+    rowside_colors = None,
+    figsize = (12, 12)
+
+    ## plot labels
+    main=None,                                     # NULL,
+    xlab=None,                                     # NULL,
+    ylab=None,                                     # NULL,
     """
-    x = scipy.rand(20, 30)
-    #x = scipy.loadtxt("f:/learn/heatmap/tst.data")
-    x = x*10
+
+    if not x:
+        x = scipy.rand(20, 30)
+        #x = scipy.loadtxt("f:/learn/heatmap/tst.data")
+        x = x*10
 
     cmap=pylab.cm.YlGnBu
     norm = mpl.colors.Normalize(vmin=x.min(), vmax=x.max())
 
-    fig = pylab.figure(figsize=(8,8))
+    if 'figsize' not in kwds:
+        kwds['figsize'] = (12, 12)
+    fig = pylab.figure(figsize=kwds['figsize'])
 
     ## calculate positions for all elements
     # ax1, dendrogram 1, on the left of the heatmap
