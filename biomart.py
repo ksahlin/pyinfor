@@ -83,6 +83,7 @@ left side of biomart:  ---------------------------------------------------------
     EntrezGene ID
     Ensembl Transcript ID
     """
+
 DEBUG = False
 
 mart_host = "www.biomart.org"
@@ -92,13 +93,8 @@ mart_url_prefix = "/biomart/martservice?"
 # limit = N could also be added 
 mart_query_header = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE Query>
-<Query  virtualSchemaName = "default" formatter = "TSV" header = "1" uniqueRows = "0" count = "" datasetConfigVersion = "0.6" >
-
-"""
-mart_query_database = None
-mart_query_dataset = None
-mart_query_filters = None
-mart_query_attributes = ["ensembl_gene_id", "ensembl_transcript_id",] # default value
+<Query  virtualSchemaName = "default" formatter = "TSV" header = "1" uniqueRows = "0" count = "" datasetConfigVersion = "0.6" >\n"""
+mart_query_tail = "\t</Dataset>\n</Query>"
 
 def reporthook(blocks_read, block_size, total_size):
     """
@@ -142,10 +138,17 @@ class BioMart:
 
     def __init__(self):
         self.con = httplib.HTTPConnection(mart_host, timeout=1000)
-        self.mart_query_database = None
-        self.mart_query_dataset = None
-        self.mart_query_filters = None
-        self.mart_query_attributes = None
+
+    def easy_response(self, params_dict, echo=False):
+        params = urllib.urlencode(params_dict)
+        self.con.request(method="POST", url=mart_url_prefix, body=params)
+        response = self.con.getresponse()
+        print "submit:", response.status, response.reason
+        data = response.read()
+        if echo:
+            for ln in data.split("\n"):
+                print ln
+        return response.status, response.reason, data
 
     def test(self):
 
@@ -180,8 +183,44 @@ CYP4A11 	1391_s_at 	ENSG00000187048 	1579 	ENST00000462347
         print "submit:", response.status, response.reason
         return response.status, response.reason, response.read()
 
-    def build_query(self):
-        mart_query_database = 'ensembl'
+    def build_query(self, dataset, filters, attributes):
+        """
+        Only dataset, filters, and attributes are needed to build a query, while database is not needed.
+        I guess this is because the dataset name is enough to identify itself.
+
+        dataset: table name
+        filters: should be a dict
+        attributes: should be list
+        """
+        mart_query_dataset = """\t<Dataset name = "%s" interface = "default" >\n""" % dataset
+        mart_query_filter = "".join("""\t\t<Filter name = "%s" value = "%s"/>\n""" % (k, v) for k,v in filters.items())
+        mart_query_attributes = "".join("""\t\t<Attribute name = "%s" />\n""" % s for s in attributes)
+
+        xml =  mart_query_header +\
+                mart_query_dataset + mart_query_filter + mart_query_attributes +\
+                mart_query_tail 
+
+        return xml
+
+    def query(self, xml=None, dataset=None, filters=None, attributes=None):
+        """ To query biomart.
+        query(xml) or query(dataset, filters, attributes)
+
+        xml: a str of xml 
+
+        dataset: table name
+        filters: should be a dict
+        attributes: should be list
+        """
+
+        if xml is None:
+            xml = self.build_query(dataset=dataset, filters=filters, attributes=attributes)
+        params_dict = {"query": xml}
+        return self.easy_response(params_dict)
+
+
+    def test_query(self):
+        # mart_query_database = 'ensembl'  # not needed, as the dataset name itself is enough to identify itself.
         # could be one dataset or more, how to explain multiple datasets remains to be determined
         mart_query_dataset = 'hsapiens_gene_ensembl'
         mart_query_filters = {"chromosome_name": "Y"}
@@ -189,43 +228,45 @@ CYP4A11 	1391_s_at 	ENSG00000187048 	1579 	ENST00000462347
                                  "external_gene_id", "external_transcript_id",
                                  "hgnc_id", "hgnc_transcript_name", "hgnc_symbol"]
 
-        query_str_dataset = """\t<Dataset name = "%s" interface = "default" >\n""" % mart_query_dataset
-        query_str_filter = "".join("""\t\t<Filter name = "%s" value = "%s"/>\n""" % (k, v) for k,v in mart_query_filters.items())
-        query_str_attributes = "".join("""\t\t<Attribute name = "%s" />\n""" % s for s in mart_query_attributes)
+        xml = self.build_query(dataset=mart_query_dataset, filters=mart_query_filters, attributes=mart_query_attributes)
+        print xml
+        params_dict = {"query": xml}
 
-        return mart_query_header + query_str_dataset + query_str_filter + query_str_attributes + "\t</Dataset>\n</Query>"
-
-    def test_query(self):
-        query = self.build_query()
-        print query
-
-        return self.easy_response(query=query)
+        return self.easy_response(params_dict)
 
     def registry_information(self):
-        params = urllib.urlencode({"type":"registry"})
-        self.con.request(method="POST", url=mart_url_prefix, body=params)
-        response = self.con.getresponse()
-        print "submit:", response.status, response.reason
-        return response.status, response.reason, response.read()
+        """
+        actually list all available databases
 
-    def available_datasets(self):
+        "name" filed in retrieved information could be used to retrieve available datasets.
+
+        Example:
+
+<MartRegistry>
+  <MartURLLocation database="ensembl_mart_65" default="1" displayName="ENSEMBL GENES 65 (SANGER UK)" host="www.biomart.org" includeDatasets="" martUser="" name="ensembl" path="/biomart/martservice" port="80" serverVirtualSchema="default" visible="1" />
+  <MartURLLocation database="snp_mart_65" default="0" displayName="ENSEMBL VARIATION 65 (SANGER UK)" host="www.biomart.org" includeDatasets="" martUser="" name="snp" path="/biomart/martservice" port="80" serverVirtualSchema="default" visible="1" />
+  <MartURLLocation database="functional_genomics_mart_65" default="0" displayName="ENSEMBL REGULATION 65 (SANGER UK)" host="www.biomart.org" includeDatasets="" martUser="" name="functional_genomics" path="/biomart/martservice" port="80" serverVirtualSchema="default" visible="1" />
+  ...
+</MartRegistry>
+        """
+
+        params_dict = {"type":"registry"}
+        return self.easy_response(params_dict, echo=True)
+
+    def available_databases(self):
+        return self.registry_information()
+
+    def available_datasets(self, mart="ensembl"):
         """
 TableSet	oanatinus_gene_ensembl	Ornithorhynchus anatinus genes (OANA5)	1	OANA5	200	50000	default	2011-09-07 22:26:09
 TableSet	tguttata_gene_ensembl	Taeniopygia guttata genes (taeGut3.2.4)	1	taeGut3.2.4	200	50000	default	2011-09-07 22:26:36
 TableSet	cporcellus_gene_ensembl	Cavia porcellus genes (cavPor3)	1	cavPor3	200	50000	default	2011-09-07 22:27:40
-TableSet	gaculeatus_gene_ensembl	Gasterosteus aculeatus genes (BROADS1)	1	BROADS1	200	50000	default	2011-09-07 22:10:34
-TableSet	lafricana_gene_ensembl	Loxodonta africana genes (loxAfr3)	1	loxAfr3	200	50000	default	2011-09-07 22:26:48
-TableSet	mlucifugus_gene_ensembl	Myotis lucifugus genes (myoLuc2)	1	myoLuc2	200	50000	default	2011-09-07 22:27:08
-TableSet	hsapiens_gene_ensembl	Homo sapiens genes (GRCh37.p5)	1	GRCh37.p5	200	50000	default	2011-09-07 22:10:13
-TableSet	choffmanni_gene_ensembl	Choloepus hoffmanni genes (choHof1)	1	choHof1	200	50000	default	2011-09-07 22:17:55
-TableSet	csavignyi_gene_ensembl	Ciona savignyi genes (CSAV2.0)	1	CSAV2.0	200	50000	default	2011-09-07 22:10:23
 (......)
+
+The second column could be used in self.available_attributes() and self.available_filters() to retrieve available attributes and filters for a given dataset.
 """
-        params = urllib.urlencode({"type":"datasets", "mart":"ensembl"})
-        self.con.request(method="POST", url=mart_url_prefix, body=params)
-        response = self.con.getresponse()
-        print "submit:", response.status, response.reason
-        return response.status, response.reason, response.read()
+        params_dict = {"type":"datasets", "mart":mart}
+        return self.easy_response(params_dict, echo=True)
 
     def available_attributes(self, dataset="hsapiens_gene_ensembl"):
         """
@@ -235,44 +276,31 @@ TableSet	csavignyi_gene_ensembl	Ciona savignyi genes (CSAV2.0)	1	CSAV2.0	200	500
         dataset could be retrived by self.available_datasets()
         """
 
-        params = urllib.urlencode({"type":"attributes", "dataset":dataset})
-        self.con.request(method="POST", url=mart_url_prefix, body=params)
-        response = self.con.getresponse()
-        print "submit:", response.status, response.reason
-        return response.status, response.reason, response.read()
+        params_dict = {"type":"attributes", "dataset":dataset}
+        return self.easy_response(params_dict, echo=True)
 
     def available_filters(self, dataset="hsapiens_gene_ensembl"):
         """
         To retrieve available filters for a given dataset.
         """
 
-        params = urllib.urlencode({"type":"filters", "dataset":dataset})
-        self.con.request(method="POST", url=mart_url_prefix, body=params)
-        response = self.con.getresponse()
-        print "submit:", response.status, response.reason
-        return response.status, response.reason, response.read()
+        params_dict = {"type":"filters", "dataset":dataset}
+        return self.easy_response(params_dict, echo=True)
 
     def configuration(self, dataset="hsapiens_gene_ensembl"):
         """
         To get configuration for a dataset.
         """
 
-        params = urllib.urlencode({"type":"configuration", "dataset":dataset})
-        self.con.request(method="POST", url=mart_url_prefix, body=params)
-        response = self.con.getresponse()
-        print "submit:", response.status, response.reason
-        return response.status, response.reason, response.read()
-
-    def easy_response(self, **params_dict):
-        params = urllib.urlencode(params_dict)
-        self.con.request(method="POST", url=mart_url_prefix, body=params)
-        response = self.con.getresponse()
-        print "submit:", response.status, response.reason
-        return response.status, response.reason, response.read()
+        params_dict = {"type":"configuration", "dataset":dataset}
+        return self.easy_response(params_dict, echo=True)
+#TODO:
+# to write some examples similar with biomaRt in bioconductor.
 
 #-----------------------------------------------------------------------
 # main
 #-----------------------------------------------------------------------
 if __name__ == '__main__':
     print BioMart().test()
+    print BioMart().test_query()
     raw_input("look")
