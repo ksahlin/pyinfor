@@ -146,42 +146,9 @@ class BioMart:
         print "submit:", response.status, response.reason
         data = response.read()
         if echo:
-            for ln in data.split("\n"):
-                print ln
+            print data
         return response.status, response.reason, data
 
-    def test(self):
-
-        mart_query_example = """<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE Query>
-<Query  virtualSchemaName = "default" formatter = "TSV" header = "0" uniqueRows = "0" count = "" datasetConfigVersion = "0.6" >
-                        
-        <Dataset name = "hsapiens_gene_ensembl" interface = "default" >
-                <Filter name = "ensembl_gene_id" value = "ENSG00000162367,ENSG00000187048"/>
-                <Attribute name = "hgnc_symbol" />
-                <Attribute name = "affy_hc_g110" />
-                <Attribute name = "ensembl_gene_id" />
-                <Attribute name = "entrezgene" />
-                <Attribute name = "ensembl_transcript_id" />
-        </Dataset>
-</Query>"""
-        mart_example_output = """ HGNC symbol 	Affy HC G110 	Ensembl Gene ID 	EntrezGene ID 	Ensembl Transcript ID
-TAL1 	560_s_at 	ENSG00000162367 	6886 	ENST00000371884
-TAL1 	560_s_at 	ENSG00000162367 	6886 	ENST00000294339
-TAL1 		ENSG00000162367 	6886 	ENST00000459729
-TAL1 		ENSG00000162367 	6886 	ENST00000464796
-TAL1 		ENSG00000162367 	6886 	ENST00000481091
-TAL1 		ENSG00000162367 	6886 	ENST00000465912
-TAL1 	560_s_at 	ENSG00000162367 	6886 	ENST00000371883
-CYP4A11 	1391_s_at 	ENSG00000187048 	1579 	ENST00000310638
-CYP4A11 	1391_s_at 	ENSG00000187048 	1579 	ENST00000475477
-CYP4A11 	1391_s_at 	ENSG00000187048 	1579 	ENST00000462347
-"""
-        params = urllib.urlencode({"query": mart_query_example})
-        self.con.request(method="POST", url=mart_url_prefix, body=params)
-        response = self.con.getresponse()
-        print "submit:", response.status, response.reason
-        return response.status, response.reason, response.read()
 
     def build_query(self, dataset, filters, attributes):
         """
@@ -193,7 +160,7 @@ CYP4A11 	1391_s_at 	ENSG00000187048 	1579 	ENST00000462347
         attributes: should be list
         """
         mart_query_dataset = """\t<Dataset name = "%s" interface = "default" >\n""" % dataset
-        mart_query_filter = "".join("""\t\t<Filter name = "%s" value = "%s"/>\n""" % (k, v) for k,v in filters.items())
+        mart_query_filter = "".join("""\t\t<Filter name = "%s" value = "%s"/>\n""" % (k, v if isinstance(v, basestring) else ",".join(v)) for k,v in filters.items())
         mart_query_attributes = "".join("""\t\t<Attribute name = "%s" />\n""" % s for s in attributes)
 
         xml =  mart_query_header +\
@@ -218,21 +185,6 @@ CYP4A11 	1391_s_at 	ENSG00000187048 	1579 	ENST00000462347
         params_dict = {"query": xml}
         return self.easy_response(params_dict)
 
-
-    def test_query(self):
-        # mart_query_database = 'ensembl'  # not needed, as the dataset name itself is enough to identify itself.
-        # could be one dataset or more, how to explain multiple datasets remains to be determined
-        mart_query_dataset = 'hsapiens_gene_ensembl'
-        mart_query_filters = {"chromosome_name": "Y"}
-        mart_query_attributes = ["ensembl_gene_id", "ensembl_transcript_id", 
-                                 "external_gene_id", "external_transcript_id",
-                                 "hgnc_id", "hgnc_transcript_name", "hgnc_symbol"]
-
-        xml = self.build_query(dataset=mart_query_dataset, filters=mart_query_filters, attributes=mart_query_attributes)
-        print xml
-        params_dict = {"query": xml}
-
-        return self.easy_response(params_dict)
 
     def registry_information(self):
         """
@@ -294,6 +246,92 @@ The second column could be used in self.available_attributes() and self.availabl
 
         params_dict = {"type":"configuration", "dataset":dataset}
         return self.easy_response(params_dict, echo=True)
+
+    def test_query(self):
+        # mart_query_database = 'ensembl'  # not needed, as the dataset name itself is enough to identify itself.
+        # could be one dataset or more, how to explain multiple datasets remains to be determined
+        mart_query_dataset = 'hsapiens_gene_ensembl'
+        mart_query_filters = {"chromosome_name": "Y"}
+        mart_query_attributes = ["ensembl_gene_id", "ensembl_transcript_id", 
+                                 "external_gene_id", "external_transcript_id",
+                                 "hgnc_id", "hgnc_transcript_name", "hgnc_symbol"]
+
+        xml = self.build_query(dataset=mart_query_dataset, filters=mart_query_filters, attributes=mart_query_attributes)
+        print xml
+        params_dict = {"query": xml}
+
+        return self.easy_response(params_dict)
+
+    def test(self):
+
+        mart_query_example = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE Query>
+<Query  virtualSchemaName = "default" formatter = "TSV" header = "0" uniqueRows = "0" count = "" datasetConfigVersion = "0.6" >
+                        
+        <Dataset name = "hsapiens_gene_ensembl" interface = "default" >
+                <Filter name = "ensembl_gene_id" value = "ENSG00000162367,ENSG00000187048"/>
+                <Attribute name = "hgnc_symbol" />
+                <Attribute name = "affy_hc_g110" />
+                <Attribute name = "ensembl_gene_id" />
+                <Attribute name = "entrezgene" />
+                <Attribute name = "ensembl_transcript_id" />
+        </Dataset>
+</Query>"""
+        mart_example_output = """ HGNC symbol 	Affy HC G110 	Ensembl Gene ID 	EntrezGene ID 	Ensembl Transcript ID
+TAL1 	560_s_at 	ENSG00000162367 	6886 	ENST00000371884
+TAL1 	560_s_at 	ENSG00000162367 	6886 	ENST00000294339
+TAL1 		ENSG00000162367 	6886 	ENST00000459729
+TAL1 		ENSG00000162367 	6886 	ENST00000464796
+TAL1 		ENSG00000162367 	6886 	ENST00000481091
+TAL1 		ENSG00000162367 	6886 	ENST00000465912
+TAL1 	560_s_at 	ENSG00000162367 	6886 	ENST00000371883
+CYP4A11 	1391_s_at 	ENSG00000187048 	1579 	ENST00000310638
+CYP4A11 	1391_s_at 	ENSG00000187048 	1579 	ENST00000475477
+CYP4A11 	1391_s_at 	ENSG00000187048 	1579 	ENST00000462347
+"""
+        params = urllib.urlencode({"query": mart_query_example})
+        self.con.request(method="POST", url=mart_url_prefix, body=params)
+        response = self.con.getresponse()
+        print "submit:", response.status, response.reason
+        return response.status, response.reason, response.read()
+
+    def test_list(self):
+        """
+        filters: affy_hg_u133a_2: ("202763_at","209310_s_at","207500_at")
+        attributes: ["ensembl_gene_id", "ensembl_transcript_id", "affy_hg_u133a_2"]
+        dataset: hsapiens_gene_ensembl
+
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE Query>
+<Query  virtualSchemaName = "default" formatter = "TSV" header = "0" uniqueRows = "0" count = "" datasetConfigVersion = "0.6" >
+			
+	<Dataset name = "hsapiens_gene_ensembl" interface = "default" >
+		<Filter name = "affy_hg_u133a_2" value = "202763_at,209310_s_at,207500_at"/>
+		<Attribute name = "ensembl_gene_id" />
+		<Attribute name = "ensembl_transcript_id" />
+		<Attribute name = "affy_hg_u133_plus_2" />
+	</Dataset>
+</Query>
+
+Ensembl Gene ID 	Ensembl Transcript ID 	Affy HG U133-PLUS-2 probeset
+ENSG00000196954 	ENST00000525116 	209310_s_at
+ENSG00000196954 	ENST00000444739 	209310_s_at
+ENSG00000196954 	ENST00000393150 	209310_s_at
+ENSG00000196954 	ENST00000529565 	213596_at
+ENSG00000196954 	ENST00000529565 	209310_s_at
+ENSG00000196954 	ENST00000533730 	209310_s_at
+ENSG00000196954 	ENST00000534356 	209310_s_at
+ENSG00000196954 	ENST00000355546 	209310_s_at
+ENSG00000137757 	ENST00000438448 	207500_at
+ENSG00000137757 	ENST00000260315 	207500_at
+"""
+
+        attributes=['affy_hg_u133_plus_2', 'hgnc_symbol', 'chromosome_name','start_position','end_position']
+        filters={"affy_hg_u133_plus_2": ("202763_at","209310_s_at","207500_at")}
+        dataset="hsapiens_gene_ensembl"
+        print self.query(attributes=attributes,filters=filters, dataset=dataset)[2]
+
+
 #TODO:
 # to write some examples similar with biomaRt in bioconductor.
 
