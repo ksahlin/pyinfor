@@ -1,11 +1,12 @@
-import httplib, time, urllib, urllib2, re, webbrowser
+import httplib, urllib
 import sys
+from collections import Iterable
 
 """
 to interact with martservice through www.biomart.org
 
 Author: Xiao Jianfeng
-last updated: 2011.11.5
+last updated: 2012.01.09
 
 http://www.biomart.org/martservice.html
 	
@@ -96,6 +97,7 @@ mart_query_header = """<?xml version="1.0" encoding="UTF-8"?>
 <Query  virtualSchemaName = "default" formatter = "TSV" header = "1" uniqueRows = "0" count = "" datasetConfigVersion = "0.6" >\n"""
 mart_query_tail = "\t</Dataset>\n</Query>"
 
+#-----------------------------------------------------------------
 def reporthook(blocks_read, block_size, total_size):
     """
     could be used to report progress while downloading.
@@ -132,8 +134,40 @@ def reporthook(blocks_read, block_size, total_size):
     else:
      amount_read = blocks_read * block_size
      print >> sys.stderr, '\rRead %d blocks, or %d/%d' % (blocks_read, amount_read, total_size),
+
     return
 
+#-----------------------------------------------------------------
+def build_query(dataset, filters, attributes):
+    """
+    Only dataset, filters, and attributes are needed to build a query, while database is not needed.
+    I guess this is because the dataset name is enough to identify itself.
+
+    dataset: table name
+    filters: should be a dict
+    attributes: should be list
+    """
+    mart_query_dataset = """\t<Dataset name = "%s" interface = "default" >\n""" % dataset
+    filter_buffer = []
+    for k, v in filters.items():
+        if not isinstance(v, Iterable):
+            raise Exception("%s should be iterable" % v)
+        if not isinstance(v, basestring): # v is a list or tuple of string, else, v is string
+            v = ",".join(v)
+        item_str = """\t\t<Filter name = "%s" value = "%s"/>\n""" % (k, v)
+        filter_buffer.append(item_str)
+    mart_query_filter = "".join(filter_buffer)
+    #mart_query_filter = "".join("""\t\t<Filter name = "%s" value = "%s"/>\n""" % (k, v if isinstance(v, basestring) else ",".join(v)) for k,v in filters.items())
+    mart_query_attributes = "".join("""\t\t<Attribute name = "%s" />\n""" % s for s in attributes)
+
+    xml =  mart_query_header +\
+            mart_query_dataset + mart_query_filter + mart_query_attributes +\
+            mart_query_tail 
+
+    return xml
+
+
+#-----------------------------------------------------------------
 class BioMart:
 
     def __init__(self):
@@ -149,26 +183,6 @@ class BioMart:
             print data
         return response.status, response.reason, data
 
-
-    def build_query(self, dataset, filters, attributes):
-        """
-        Only dataset, filters, and attributes are needed to build a query, while database is not needed.
-        I guess this is because the dataset name is enough to identify itself.
-
-        dataset: table name
-        filters: should be a dict
-        attributes: should be list
-        """
-        mart_query_dataset = """\t<Dataset name = "%s" interface = "default" >\n""" % dataset
-        mart_query_filter = "".join("""\t\t<Filter name = "%s" value = "%s"/>\n""" % (k, v if isinstance(v, basestring) else ",".join(v)) for k,v in filters.items())
-        mart_query_attributes = "".join("""\t\t<Attribute name = "%s" />\n""" % s for s in attributes)
-
-        xml =  mart_query_header +\
-                mart_query_dataset + mart_query_filter + mart_query_attributes +\
-                mart_query_tail 
-
-        return xml
-
     def query(self, xml=None, dataset=None, filters=None, attributes=None):
         """ To query biomart.
         query(xml) or query(dataset, filters, attributes)
@@ -181,10 +195,9 @@ class BioMart:
         """
 
         if xml is None:
-            xml = self.build_query(dataset=dataset, filters=filters, attributes=attributes)
+            xml = build_query(dataset=dataset, filters=filters, attributes=attributes)
         params_dict = {"query": xml}
         return self.easy_response(params_dict)
-
 
     def registry_information(self):
         """
@@ -203,9 +216,11 @@ class BioMart:
         """
 
         params_dict = {"type":"registry"}
+
         return self.easy_response(params_dict, echo=True)
 
     def available_databases(self):
+
         return self.registry_information()
 
     def available_datasets(self, mart="ensembl"):
@@ -218,6 +233,7 @@ TableSet	cporcellus_gene_ensembl	Cavia porcellus genes (cavPor3)	1	cavPor3	200	5
 The second column could be used in self.available_attributes() and self.available_filters() to retrieve available attributes and filters for a given dataset.
 """
         params_dict = {"type":"datasets", "mart":mart}
+
         return self.easy_response(params_dict, echo=True)
 
     def available_attributes(self, dataset="hsapiens_gene_ensembl"):
@@ -229,6 +245,7 @@ The second column could be used in self.available_attributes() and self.availabl
         """
 
         params_dict = {"type":"attributes", "dataset":dataset}
+
         return self.easy_response(params_dict, echo=True)
 
     def available_filters(self, dataset="hsapiens_gene_ensembl"):
@@ -237,6 +254,7 @@ The second column could be used in self.available_attributes() and self.availabl
         """
 
         params_dict = {"type":"filters", "dataset":dataset}
+
         return self.easy_response(params_dict, echo=True)
 
     def configuration(self, dataset="hsapiens_gene_ensembl"):
@@ -245,6 +263,7 @@ The second column could be used in self.available_attributes() and self.availabl
         """
 
         params_dict = {"type":"configuration", "dataset":dataset}
+
         return self.easy_response(params_dict, echo=True)
 
     def test_query(self):
@@ -256,7 +275,7 @@ The second column could be used in self.available_attributes() and self.availabl
                                  "external_gene_id", "external_transcript_id",
                                  "hgnc_id", "hgnc_transcript_name", "hgnc_symbol"]
 
-        xml = self.build_query(dataset=mart_query_dataset, filters=mart_query_filters, attributes=mart_query_attributes)
+        xml = build_query(dataset=mart_query_dataset, filters=mart_query_filters, attributes=mart_query_attributes)
         print xml
         params_dict = {"query": xml}
 
@@ -289,11 +308,10 @@ CYP4A11 	1391_s_at 	ENSG00000187048 	1579 	ENST00000310638
 CYP4A11 	1391_s_at 	ENSG00000187048 	1579 	ENST00000475477
 CYP4A11 	1391_s_at 	ENSG00000187048 	1579 	ENST00000462347
 """
-        params = urllib.urlencode({"query": mart_query_example})
-        self.con.request(method="POST", url=mart_url_prefix, body=params)
-        response = self.con.getresponse()
-        print "submit:", response.status, response.reason
-        return response.status, response.reason, response.read()
+
+        params_dict = {"query": mart_query_example}
+
+        return self.easy_response(params_dict)
 
     def test_list(self):
         """
