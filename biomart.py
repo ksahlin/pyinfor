@@ -1,12 +1,14 @@
 import httplib, urllib
 import sys
 from collections import Iterable
+from shlex import split as shlex_split
+from collections import OrderedDict
 
 """
 to interact with martservice through www.biomart.org
 
 Author: Xiao Jianfeng
-last updated: 2012.01.09
+last updated: 2012.01.10
 
 http://www.biomart.org/martservice.html
 	
@@ -138,7 +140,7 @@ def reporthook(blocks_read, block_size, total_size):
     return
 
 #-----------------------------------------------------------------
-def build_query(dataset, filters, attributes):
+def build_query(dataset, attributes, filters=None):
     """
     Only dataset, filters, and attributes are needed to build a query, while database is not needed.
     I guess this is because the dataset name is enough to identify itself.
@@ -147,17 +149,25 @@ def build_query(dataset, filters, attributes):
     filters: should be a dict
     attributes: should be list
     """
+
     mart_query_dataset = """\t<Dataset name = "%s" interface = "default" >\n""" % dataset
-    filter_buffer = []
-    for k, v in filters.items():
-        if not isinstance(v, Iterable):
-            raise Exception("%s should be iterable" % v)
-        if not isinstance(v, basestring): # v is a list or tuple of string, else, v is string
-            v = ",".join(v)
-        item_str = """\t\t<Filter name = "%s" value = "%s"/>\n""" % (k, v)
-        filter_buffer.append(item_str)
-    mart_query_filter = "".join(filter_buffer)
-    #mart_query_filter = "".join("""\t\t<Filter name = "%s" value = "%s"/>\n""" % (k, v if isinstance(v, basestring) else ",".join(v)) for k,v in filters.items())
+
+    if filters:  # filters may be None
+        filter_buffer = []
+        for k, v in filters.items():
+            if not isinstance(v, Iterable):
+                raise Exception("%s should be iterable" % v)
+            if not isinstance(v, basestring): # v is a list or tuple of string, else, v is string
+                v = ",".join(v)
+            item_str = """\t\t<Filter name = "%s" value = "%s"/>\n""" % (k, v)
+            filter_buffer.append(item_str)
+        mart_query_filter = "".join(filter_buffer)
+        #mart_query_filter = "".join("""\t\t<Filter name = "%s" value = "%s"/>\n""" % (k, v if isinstance(v, basestring) else ",".join(v)) for k,v in filters.items())
+    else:
+        mart_query_filter = ""
+
+    if isinstance(attributes, basestring): # if attributes is a single value, make it a list
+        attributes = [attributes]
     mart_query_attributes = "".join("""\t\t<Attribute name = "%s" />\n""" % s for s in attributes)
 
     xml =  mart_query_header +\
@@ -170,8 +180,23 @@ def build_query(dataset, filters, attributes):
 #-----------------------------------------------------------------
 class BioMart:
 
-    def __init__(self):
-        self.con = httplib.HTTPConnection(mart_host, timeout=1000)
+    def __init__(self, mart=None, dataset=None, timeout=1000):
+        """ it seems mart is necessary to query biomart, dataset+[filters+]attributes is enough"""
+
+        self.con = httplib.HTTPConnection(mart_host, timeout=timeout)
+        self.mart = mart
+        self.dataset = dataset
+
+    def use_mart(self, mart):
+        """set the value of mart
+        This method is the same with use_database"""
+        self.mart = mart
+
+    def use_database(self, database):
+        self.mart = database
+
+    def use_dataset(self, dataset):
+        self.dataset = dataset
 
     def easy_response(self, params_dict, echo=False):
         params = urllib.urlencode(params_dict)
@@ -195,7 +220,7 @@ class BioMart:
         """
 
         if xml is None:
-            xml = build_query(dataset=dataset, filters=filters, attributes=attributes)
+            xml = build_query(dataset=dataset, attributes=attributes, filters=filters)
         params_dict = {"query": xml}
         return self.easy_response(params_dict)
 
@@ -217,13 +242,29 @@ class BioMart:
 
         params_dict = {"type":"registry"}
 
-        return self.easy_response(params_dict, echo=True)
+        status, reason, data = self.easy_response(params_dict, echo=False)
+
+        # parse the output to make it more readable
+        databases = []
+        for line in data.strip().split('\n'):
+            ln = shlex_split(line)
+            ln_dict = dict(item.split('=') for item in ln if '=' in item)
+            if 'name' in ln_dict and 'displayName' in ln_dict:
+                databases.append(OrderedDict(biomart=ln_dict['name'], version=ln_dict['displayName']))
+        name_max_len = max(len(d['biomart']) for d in databases)
+        version_max_len = max(len(d['version']) for d in databases)
+
+        print "".ljust(5), 'biomart'.rjust(name_max_len+1), 'version'.rjust(version_max_len+1)
+        for i, d in enumerate(databases):
+            print str(i+1).ljust(5), d['biomart'].rjust(name_max_len+1), d['version'].rjust(version_max_len+1)
+
+        return databases
 
     def available_databases(self):
 
         return self.registry_information()
 
-    def available_datasets(self, mart="ensembl"):
+    def available_datasets(self, mart=None):
         """
 TableSet	oanatinus_gene_ensembl	Ornithorhynchus anatinus genes (OANA5)	1	OANA5	200	50000	default	2011-09-07 22:26:09
 TableSet	tguttata_gene_ensembl	Taeniopygia guttata genes (taeGut3.2.4)	1	taeGut3.2.4	200	50000	default	2011-09-07 22:26:36
@@ -232,11 +273,31 @@ TableSet	cporcellus_gene_ensembl	Cavia porcellus genes (cavPor3)	1	cavPor3	200	5
 
 The second column could be used in self.available_attributes() and self.available_filters() to retrieve available attributes and filters for a given dataset.
 """
+
+        mart = mart if mart else self.mart
+        if mart is None:
+            raise Exception("mart in available_databases() and self.mart couldn't be all None")
+        print "Mart being used is: ", mart
+
         params_dict = {"type":"datasets", "mart":mart}
 
-        return self.easy_response(params_dict, echo=True)
+        status, reason, data = self.easy_response(params_dict, echo=False)
 
-    def available_attributes(self, dataset="hsapiens_gene_ensembl"):
+        # parse the output to make it more readable
+        data2 = [ln.split('\t') for ln in data.strip().split('\n') if ln.strip()]
+        data3 = [[ln[1], ln[2], ln[4]] for ln in data2] # dataset, description, version
+        datasets = [OrderedDict(dataset=ln[0], description=ln[1], version=ln[2]) for ln in data3]
+        max_len_dataset = max(len(d['dataset']) for d in datasets)
+        max_len_description = max(len(d['description']) for d in datasets)
+        max_len_version = max(len(d['version']) for d in datasets)
+
+        print "".ljust(5), 'dataset'.rjust(max_len_dataset+1), 'description'.rjust(max_len_description+1), 'version'.rjust(max_len_version+1)
+        for i, d in enumerate(datasets):
+            print str(i+1).ljust(5), d['dataset'].rjust(max_len_dataset+1), d['description'].rjust(max_len_description+1), d['version'].rjust(max_len_version+1)
+
+        return datasets
+
+    def available_attributes(self, dataset=None):
         """
         To retrieve available attributes for a given dataset.
 
@@ -244,23 +305,62 @@ The second column could be used in self.available_attributes() and self.availabl
         dataset could be retrived by self.available_datasets()
         """
 
+        dataset = dataset if dataset else self.dataset
+        if dataset is None:
+            raise Exception("dataset in available_attributes() and self.dataset couldn't be all None")
+        print "Dataset being used is: ", dataset
+
         params_dict = {"type":"attributes", "dataset":dataset}
+        status, reason, data = self.easy_response(params_dict, echo=False)
 
-        return self.easy_response(params_dict, echo=True)
+        # parse the output to make it more readable
+        data2 = [ln.split('\t') for ln in data.strip().split('\n')]
+        attributes = [OrderedDict(name=ln[0], description=ln[1], long_description=ln[2]) for ln in data2]
 
-    def available_filters(self, dataset="hsapiens_gene_ensembl"):
+        max_len_name = max(len(f['name']) for f in attributes)
+        max_len_description = max(len(f['description']) for f in attributes)
+
+        print "".ljust(5), 'name'.rjust(max_len_name+1), 'description'.rjust(max_len_description+1)
+        for i, d in enumerate(attributes):
+            print str(i+1).ljust(5), d['name'].rjust(max_len_name+1), d['description'].rjust(max_len_description+1)
+
+        return attributes
+
+    def available_filters(self, dataset=None):
         """
         To retrieve available filters for a given dataset.
         """
 
+        dataset = dataset if dataset else self.dataset
+        if dataset is None:
+            raise Exception("dataset in available_filters() and self.dataset couldn't be all None")
+        print "Dataset being used is: ", dataset
+
         params_dict = {"type":"filters", "dataset":dataset}
+        status, reason, data = self.easy_response(params_dict, echo=False)
 
-        return self.easy_response(params_dict, echo=True)
+        # parse the output to make it more readable
+        data2 = [ln.split('\t') for ln in data.strip().split('\n')]
+        filters = [OrderedDict({'name': ln[0], 'description': ln[1], 'possible_data': ln[2]}) for ln in data2]
 
-    def configuration(self, dataset="hsapiens_gene_ensembl"):
+        max_len_name = max(len(f['name']) for f in filters)
+        max_len_description = max(len(f['description']) for f in filters)
+
+        print "".ljust(5), 'name'.rjust(max_len_name+1), 'description'.rjust(max_len_description+1)
+        for i, d in enumerate(filters):
+            print str(i+1).ljust(5), d['name'].rjust(max_len_name+1), d['description'].rjust(max_len_description+1)
+
+        return filters
+
+    def configuration(self, dataset=None):
         """
         To get configuration for a dataset.
         """
+
+        dataset = dataset if dataset else self.dataset
+        if dataset is None:
+            raise Exception("dataset in configuration() and self.dataset couldn't be all None")
+        print "Dataset being used is: ", dataset
 
         params_dict = {"type":"configuration", "dataset":dataset}
 
@@ -275,7 +375,7 @@ The second column could be used in self.available_attributes() and self.availabl
                                  "external_gene_id", "external_transcript_id",
                                  "hgnc_id", "hgnc_transcript_name", "hgnc_symbol"]
 
-        xml = build_query(dataset=mart_query_dataset, filters=mart_query_filters, attributes=mart_query_attributes)
+        xml = build_query(dataset=mart_query_dataset, attributes=mart_query_attributes, filters=mart_query_filters)
         print xml
         params_dict = {"query": xml}
 
@@ -347,11 +447,38 @@ ENSG00000137757 	ENST00000260315 	207500_at
         attributes=['affy_hg_u133_plus_2', 'hgnc_symbol', 'chromosome_name','start_position','end_position']
         filters={"affy_hg_u133_plus_2": ("202763_at","209310_s_at","207500_at")}
         dataset="hsapiens_gene_ensembl"
-        print self.query(attributes=attributes,filters=filters, dataset=dataset)[2]
+        data = self.query(attributes=attributes,filters=filters, dataset=dataset)[2]
+        print data
 
+        data2 = [ln.split('\t') for ln in data.strip().split('\n')]
+        colnames = data2[0]
+        results = [OrderedDict(zip(colnames, ln)) for ln in data2[1:]]
+
+        return results
+
+    def get_BM(self, attributes, filters=None, dataset=None):
+        """
+        example:
+            filters: affy_hg_u133a_2: ("202763_at","209310_s_at","207500_at")
+            attributes: ["ensembl_gene_id", "ensembl_transcript_id", "affy_hg_u133a_2"]
+            dataset: hsapiens_gene_ensembl
+        """
+
+        if dataset is None:
+            dataset = self.dataset
+
+        data = self.query(dataset=dataset, attributes=attributes,filters=filters)[2]
+        print data
+
+        data2 = [ln.split('\t') for ln in data.strip().split('\n')]
+        colnames = data2[0]
+        results = [OrderedDict(zip(colnames, ln)) for ln in data2[1:]]
+
+        return results
 
 #TODO:
-# to write some examples similar with biomaRt in bioconductor.
+# 1) to write some examples similar with biomaRt in bioconductor.
+# 2) clean the parameter list of all functions
 
 #-----------------------------------------------------------------------
 # main
