@@ -110,6 +110,9 @@ or
 # ## refseqids = c("NM_005359","NM_000546")
 # ## ipro = getBM(attributes=c("refseq_dna","interpro","interpro_description"), filters="refseq_dna",values=refseqids, mart=ensembl)
 # 
+  refseqids = ("NM_005359", "NM_000546")
+  ipro = ensembl.get_BM(attributes=("refseq_dna","interpro","interpro_description"), filters={"refseq_dna": refseqids})
+
 # 
 # ###################################################
 # ### code chunk number 12: biomaRt.Rnw:219-221
@@ -117,12 +120,20 @@ or
 # getBM(c('affy_hg_u133_plus_2','ensembl_gene_id'), filters = c('chromosome_name','start','end'),
 #  values=list(16,1100000,1250000), mart=ensembl)
 # 
+  ensembl.get_BM(attributes=('affy_hg_u133_plus_2','ensembl_gene_id'), filters={'chromosome_name': 16, 'start': 1100000, 'end': 1250000})
+  or
+  biomart.BioMart().get_BM(attributes=('affy_hg_u133_plus_2','ensembl_gene_id'), filters={'chromosome_name': 16, 'start': 1100000, 'end': 1250000}, dataset='hsapiens_gene_ensembl')
+
 # 
 # ###################################################
 # ### code chunk number 13: biomaRt.Rnw:228-229 (eval = FALSE)
 # ###################################################
 # ## getBM(c('entrezgene','hgnc_symbol'), filters='go', values='GO:0004707', mart=ensembl)
 # 
+  ensembl.get_BM(attributes=('entrezgene','hgnc_symbol'), filters={'go': 'GO:0004707'})
+  or
+  biomart.BioMart().get_BM(attributes=('entrezgene','hgnc_symbol'), filters={'go': 'GO:0004707'}, dataset='hsapiens_gene_ensembl')
+
 # 
 # ###################################################
 # ### code chunk number 14: biomaRt.Rnw:250-252 (eval = FALSE)
@@ -130,6 +141,13 @@ or
 # ## entrez=c("673","7157","837")
 # ## getSequence(id = entrez, type="entrezgene",seqType="coding_gene_flank",upstream=100, mart=ensembl) 
 # 
+  #---------------------------------------------------------------
+  # Currently biomart.py could only do this if you first try http://asia.ensembl.org/biomart/martview
+  # and get the right attributes, filters and dataset, then you can use get_BM() to retrieve the information
+  # you want. 
+  # And you may need to use get_BM(...., return_raw=True) as get_BM currently couldn't parse FASTA.
+  #---------------------------------------------------------------
+
 # 
 # ###################################################
 # ### code chunk number 15: biomaRt.Rnw:260-263 (eval = FALSE)

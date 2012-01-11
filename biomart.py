@@ -92,13 +92,6 @@ DEBUG = False
 mart_host = "www.biomart.org"
 mart_url_prefix = "/biomart/martservice?"
 
-#Note: if header = "0" --> no header; header = "1" or "ture" --> with header
-# limit = N could also be added 
-mart_query_header = """<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE Query>
-<Query  virtualSchemaName = "default" formatter = "TSV" header = "1" uniqueRows = "0" count = "" datasetConfigVersion = "0.6" >\n"""
-mart_query_tail = "\t</Dataset>\n</Query>"
-
 #-----------------------------------------------------------------
 def reporthook(blocks_read, block_size, total_size):
     """
@@ -140,7 +133,7 @@ def reporthook(blocks_read, block_size, total_size):
     return
 
 #-----------------------------------------------------------------
-def build_query(dataset, attributes, filters=None):
+def build_query(dataset, attributes, filters=None, formatter="TSV"):
     """
     Only dataset, filters, and attributes are needed to build a query, while database is not needed.
     I guess this is because the dataset name is enough to identify itself.
@@ -148,9 +141,26 @@ def build_query(dataset, attributes, filters=None):
     dataset: table name
     filters: should be a dict
     attributes: should be list
+
+    formatter: TSV or FASTA
     """
 
     mart_query_dataset = """\t<Dataset name = "%s" interface = "default" >\n""" % dataset
+
+    if formatter == 'TSV':
+        #Note: if header = "0" --> no header; header = "1" or "ture" --> with header
+        # limit = N could also be added 
+        mart_query_header = """<?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE Query>
+        <Query  virtualSchemaName = "default" formatter = "TSV" header = "1" uniqueRows = "0" count = "" datasetConfigVersion = "0.6" >\n"""
+    elif formatter == 'FASTA':
+        mart_query_header = """<?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE Query>
+        <Query  virtualSchemaName = "default" formatter = "FASTA" header = "0" uniqueRows = "0" count = "" datasetConfigVersion = "0.6" >\n"""
+    else:
+        raise Exception("Currently only 'TSV' and 'FASTA' are supported as formatter")
+        
+    mart_query_tail = "\t</Dataset>\n</Query>"
 
     if filters:  # filters may be None
         filter_buffer = []
@@ -162,7 +172,6 @@ def build_query(dataset, attributes, filters=None):
             item_str = """\t\t<Filter name = "%s" value = "%s"/>\n""" % (k, v)
             filter_buffer.append(item_str)
         mart_query_filter = "".join(filter_buffer)
-        #mart_query_filter = "".join("""\t\t<Filter name = "%s" value = "%s"/>\n""" % (k, v if isinstance(v, basestring) else ",".join(v)) for k,v in filters.items())
     else:
         mart_query_filter = ""
 
@@ -456,7 +465,7 @@ ENSG00000137757 	ENST00000260315 	207500_at
 
         return results
 
-    def get_BM(self, attributes, filters=None, dataset=None):
+    def get_BM(self, attributes, filters=None, dataset=None, filename=None, return_raw=False):
         """
         example:
             filters: affy_hg_u133a_2: ("202763_at","209310_s_at","207500_at")
@@ -468,8 +477,15 @@ ENSG00000137757 	ENST00000260315 	207500_at
             dataset = self.dataset
 
         data = self.query(dataset=dataset, attributes=attributes,filters=filters)[2]
-        print data
+        if filename is not None:
+            open(filename, 'w').write(data)
+        else:
+            sys.stdout.write(data)
 
+        if return_raw:
+            return data
+
+        # This only works for TSV format with header
         data2 = [ln.split('\t') for ln in data.strip().split('\n')]
         colnames = data2[0]
         results = [OrderedDict(zip(colnames, ln)) for ln in data2[1:]]
