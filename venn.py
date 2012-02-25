@@ -38,6 +38,17 @@ def get_labels(data, fill="number"):
 
     return
       labels: a dict of labels for different sets
+
+    example:
+    In [12]: get_labels([range(10), range(5,15), range(3,8)], fill="both")
+    Out[12]:
+    {'001': '001: 0',
+     '010': '010: 5',
+     '011': '011: 0',
+     '100': '100: 3',
+     '101': '101: 2',
+     '110': '110: 2',
+     '111': '111: 3'}
     """
 
     N = len(data)
@@ -79,8 +90,6 @@ def venn2(data=None, names=None, fill="number", show_names=True, show_plot=True,
 
     labels = get_labels(data, fill=fill)
 
-    r, x1, y1, x2, y2 = 2.0, 3.0, 4.0, 5.0, 4.0
-
     # set figure size
     if 'figsize' in kwds and len(kwds['figsize']) == 2:
         # if 'figsize' is in kwds, and it is a list or tuple with length of 2
@@ -92,6 +101,10 @@ def venn2(data=None, names=None, fill="number", show_names=True, show_plot=True,
     ax = fig.gca(); ax.set_aspect("equal")
     ax.set_xticks([]); ax.set_yticks([]);
     ax.set_xlim(0, 8); ax.set_ylim(0, 8)
+
+    # r: radius of the circles
+    # (x1, y1), (x2, y2): center of circles
+    r, x1, y1, x2, y2 = 2.0, 3.0, 4.0, 5.0, 4.0
 
     # set colors for different Circles or ellipses
     if 'colors' in kwds and isinstance(kwds['colors'], Iterable) and len(kwds['colors']) >= 2:
@@ -132,9 +145,6 @@ def venn3(data=None, names=None, fill="number", show_names=True, show_plot=True,
 
     labels = get_labels(data, fill=fill)
 
-    r, x1, y1, x2, y2 = 2.0, 3.0, 3.0, 5.0, 3.0
-    x3, y3 = (x1+x2)/2.0, y1 + 3**0.5/2*r
-
     # set figure size
     if 'figsize' in kwds and len(kwds['figsize']) == 2:
         # if 'figsize' is in kwds, and it is a list or tuple with length of 2
@@ -147,6 +157,11 @@ def venn3(data=None, names=None, fill="number", show_names=True, show_plot=True,
     ax.set_aspect("equal")                # set aspect ratio to 1
     ax.set_xticks([]); ax.set_yticks([]);
     ax.set_xlim(0, 8); ax.set_ylim(0, 8)
+
+    # r: radius of the circles
+    # (x1, y1), (x2, y2), (x3, y3): center of circles
+    r, x1, y1, x2, y2 = 2.0, 3.0, 3.0, 5.0, 3.0
+    x3, y3 = (x1+x2)/2.0, y1 + 3**0.5/2*r
 
     # set colors for different Circles or ellipses
     if 'colors' in kwds and isinstance(kwds['colors'], Iterable) and len(kwds['colors']) >= 3:
@@ -206,11 +221,11 @@ def venn4(data=None, names=None, fill="number", show_names=True, show_plot=True,
     else:
         colors = ['r', 'g', 'b', 'c']
 
-    # draw ellipse
+    # draw ellipse, the coordinates are hard coded in the rest of the function
     fig = pylab.figure(figsize=figsize)   # set figure size
     ax = fig.gca()
     patches = []
-    width, height = 170, 110
+    width, height = 170, 110  # width and height of the ellipses
     patches.append(Ellipse((170, 170), width, height, -45, color=colors[0], alpha=0.5))
     patches.append(Ellipse((200, 200), width, height, -45, color=colors[1], alpha=0.5))
     patches.append(Ellipse((200, 200), width, height, -135, color=colors[2], alpha=0.5))
