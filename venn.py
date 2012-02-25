@@ -1,6 +1,7 @@
 import pylab
-from matplotlib.patches import Ellipse
-from itertools import combinations, chain
+from matplotlib.patches import Circle, Ellipse
+from itertools import chain
+from collections import Iterable
 
 #--------------------------------------------------------------------
 alignment = {'horizontalalignment':'center', 'verticalalignment':'baseline'}
@@ -17,10 +18,10 @@ def venn(data, names=None, fill="number", show_names=True, show_plot=True, **kwd
 
     if data is None:
         raise Exception("No data!")
-    if len(data) == 3:
-        venn3(data, names, fill, show_names, show_plot, **kwds)
-    elif len(data) == 2:
+    if len(data) == 2:
         venn2(data, names, fill, show_names, show_plot, **kwds)
+    elif len(data) == 3:
+        venn3(data, names, fill, show_names, show_plot, **kwds)
     elif len(data) == 4:
         venn4(data, names, fill, show_names, show_plot, **kwds)
     else:
@@ -58,7 +59,7 @@ def get_labels(data, fill="number"):
         set_collections[key] = value
 
     if fill == "number":
-        labels = {k:len(set_collections[k]) for k in set_collections}
+        labels = {k: len(set_collections[k]) for k in set_collections}
     elif fill == "logic":
         labels = {k: k for k in set_collections}
     elif fill == "both":
@@ -67,6 +68,120 @@ def get_labels(data, fill="number"):
         raise Exception("invalid value for fill")
 
     return labels
+
+#--------------------------------------------------------------------
+def venn2(data=None, names=None, fill="number", show_names=True, show_plot=True, **kwds):
+
+    if (data is None) or len(data) != 2:
+        raise Exception("length of data should be 2!")
+    if (names is None) or (len(names) != 2):
+        names = ("set 1", "set 2")
+
+    labels = get_labels(data, fill=fill)
+
+    r, x1, y1, x2, y2 = 2.0, 3.0, 4.0, 5.0, 4.0
+
+    # set figure size
+    if 'figsize' in kwds and len(kwds['figsize']) == 2:
+        # if 'figsize' is in kwds, and it is a list or tuple with length of 2
+        figsize = kwds['figsize']
+    else: # default figure size
+        figsize = (8, 8)
+
+    fig = pylab.figure(figsize=figsize)
+    ax = fig.gca(); ax.set_aspect("equal")
+    ax.set_xticks([]); ax.set_yticks([]);
+    ax.set_xlim(0, 8); ax.set_ylim(0, 8)
+
+    # set colors for different Circles or ellipses
+    if 'colors' in kwds and isinstance(kwds['colors'], Iterable) and len(kwds['colors']) >= 2:
+        colors = kwds['colors']
+    else:
+        colors = ['red', 'green']
+
+    c1 = Circle((x1,y1), radius=r, alpha=0.5, color=colors[0])
+    c2 = Circle((x2,y2), radius=r, alpha=0.5, color=colors[1])
+
+    ax.add_patch(c1)
+    ax.add_patch(c2)
+
+    ## draw text
+    #1
+    pylab.text(x1-r/2, y1, labels['10'], **alignment)
+    pylab.text(x2+r/2, y2, labels['01'], **alignment)
+    # 2
+    pylab.text((x1+x2)/2, y1, labels['11'], **alignment)
+    # names of different groups
+    if show_names:
+        pylab.text(x1, y1-1.2*r, names[0], fontsize=16, **alignment)
+        pylab.text(x2, y2-1.2*r, names[1], fontsize=16, **alignment)
+
+    leg = ax.legend(names, loc='best', fancybox=True)
+    leg.get_frame().set_alpha(0.5)
+
+    if show_plot:
+        pylab.show()
+
+#--------------------------------------------------------------------
+def venn3(data=None, names=None, fill="number", show_names=True, show_plot=True, **kwds):
+
+    if (data is None) or len(data) != 3:
+        raise Exception("length of data should be 3!")
+    if (names is None) or (len(names) != 3):
+        names = ("set 1", "set 2", "set 3")
+
+    labels = get_labels(data, fill=fill)
+
+    r, x1, y1, x2, y2 = 2.0, 3.0, 3.0, 5.0, 3.0
+    x3, y3 = (x1+x2)/2.0, y1 + 3**0.5/2*r
+
+    # set figure size
+    if 'figsize' in kwds and len(kwds['figsize']) == 2:
+        # if 'figsize' is in kwds, and it is a list or tuple with length of 2
+        figsize = kwds['figsize']
+    else: # default figure size
+        figsize = (10, 10)
+
+    fig = pylab.figure(figsize=figsize)   # set figure size
+    ax = fig.gca()
+    ax.set_aspect("equal")                # set aspect ratio to 1
+    ax.set_xticks([]); ax.set_yticks([]);
+    ax.set_xlim(0, 8); ax.set_ylim(0, 8)
+
+    # set colors for different Circles or ellipses
+    if 'colors' in kwds and isinstance(kwds['colors'], Iterable) and len(kwds['colors']) >= 3:
+        colors = kwds['colors']
+    else:
+        colors = ['red', 'green', 'blue']
+
+    c1 = Circle((x1,y1), radius=r, alpha=0.5, color=colors[0])
+    c2 = Circle((x2,y2), radius=r, alpha=0.5, color=colors[1])
+    c3 = Circle((x3,y3), radius=r, alpha=0.5, color=colors[2])
+    for c in (c1, c2, c3):
+        ax.add_patch(c)
+
+    ## draw text
+    # 1
+    pylab.text(x1-r/2, y1-r/2, labels['100'], **alignment)
+    pylab.text(x2+r/2, y2-r/2, labels['010'], **alignment)
+    pylab.text((x1+x2)/2, y3+r/2, labels['001'], **alignment)
+    # 2
+    pylab.text((x1+x2)/2, y1-r/2, labels['110'], **alignment)
+    pylab.text(x1, y1+2*r/3, labels['101'], **alignment)
+    pylab.text(x2, y2+2*r/3, labels['011'], **alignment)
+    # 3
+    pylab.text((x1+x2)/2, y1+r/3, labels['111'], **alignment)
+    # names of different groups
+    if show_names:
+        pylab.text(x1-r, y1-r, names[0], fontsize=16, **alignment)
+        pylab.text(x2+r, y2-r, names[1], fontsize=16, **alignment)
+        pylab.text(x3, y3+1.2*r, names[2], fontsize=16, **alignment)
+
+    leg = ax.legend(names, loc='best', fancybox=True)
+    leg.get_frame().set_alpha(0.5)
+
+    if show_plot:
+        pylab.show()
 
 #--------------------------------------------------------------------
 def venn4(data=None, names=None, fill="number", show_names=True, show_plot=True, **kwds):
@@ -78,15 +193,28 @@ def venn4(data=None, names=None, fill="number", show_names=True, show_plot=True,
 
     labels = get_labels(data, fill=fill)
 
+    # set figure size
+    if 'figsize' in kwds and len(kwds['figsize']) == 2:
+        # if 'figsize' is in kwds, and it is a list or tuple with length of 2
+        figsize = kwds['figsize']
+    else: # default figure size
+        figsize = (10, 10)
+
+    # set colors for different Circles or ellipses
+    if 'colors' in kwds and isinstance(kwds['colors'], Iterable) and len(kwds['colors']) >= 4:
+        colors = kwds['colors']
+    else:
+        colors = ['r', 'g', 'b', 'c']
+
     # draw ellipse
-    fig = pylab.figure(figsize=(10,10))   # set figure size
+    fig = pylab.figure(figsize=figsize)   # set figure size
     ax = fig.gca()
     patches = []
     width, height = 170, 110
-    patches.append(Ellipse((170, 170), width, height, -45, color='r', alpha=0.5))
-    patches.append(Ellipse((200, 200), width, height, -45, color='g', alpha=0.5))
-    patches.append(Ellipse((200, 200), width, height, -135, color='b', alpha=0.5))
-    patches.append(Ellipse((230, 170), width, height, -135, color='c', alpha=0.5))
+    patches.append(Ellipse((170, 170), width, height, -45, color=colors[0], alpha=0.5))
+    patches.append(Ellipse((200, 200), width, height, -45, color=colors[1], alpha=0.5))
+    patches.append(Ellipse((200, 200), width, height, -135, color=colors[2], alpha=0.5))
+    patches.append(Ellipse((230, 170), width, height, -135, color=colors[3], alpha=0.5))
     for e in patches:
         ax.add_patch(e)
     ax.set_xlim(80, 320); ax.set_ylim(80, 320)
@@ -127,99 +255,17 @@ def venn4(data=None, names=None, fill="number", show_names=True, show_plot=True,
         pylab.show()
 
 #--------------------------------------------------------------------
-def venn3(data=None, names=None, fill="number", show_names=True, show_plot=True, **kwds):
+def test():
+    """ a test function to show basic usage of venn()"""
 
-    if (data is None) or len(data) != 3:
-        raise Exception("length of data should be 3!")
-    if (names is None) or (len(names) != 3):
-        names = ("set 1", "set 2", "set 3")
-
-    labels = get_labels(data, fill=fill)
-
-    r, x1, y1, x2, y2 = 2.0, 3.0, 3.0, 5.0, 3.0
-    x3, y3 = (x1+x2)/2.0, y1 + 3**0.5/2*r
-
-    fig = pylab.figure(figsize=(10,10))   # set figure size
-    ax = pylab.gca()
-    ax.set_aspect("equal")                # set aspect ratio to 1
-    ax.set_xticks([]); ax.set_yticks([]);
-    ax.set_xlim(0, 8); ax.set_ylim(0, 8)
-
-    c1 = pylab.Circle((x1,y1), radius=r, alpha=0.5, color="red")
-    c2 = pylab.Circle((x2,y2), radius=r, alpha=0.5, color="green")
-    c3 = pylab.Circle((x3,y3), radius=r, alpha=0.5, color="blue")
-    for c in (c1, c2, c3):
-        ax.add_patch(c)
-
-    ## draw text
-    # 1
-    pylab.text(x1-r/2, y1-r/2, labels['100'], **alignment)
-    pylab.text(x2+r/2, y2-r/2, labels['010'], **alignment)
-    pylab.text((x1+x2)/2, y3+r/2, labels['001'], **alignment)
-    # 2
-    pylab.text((x1+x2)/2, y1-r/2, labels['110'], **alignment)
-    pylab.text(x1, y1+2*r/3, labels['101'], **alignment)
-    pylab.text(x2, y2+2*r/3, labels['011'], **alignment)
-    # 3
-    pylab.text((x1+x2)/2, y1+r/3, labels['111'], **alignment)
-    # names of different groups
-    if show_names:
-        pylab.text(x1-r, y1-r, names[0], fontsize=16, **alignment)
-        pylab.text(x2+r, y2-r, names[1], fontsize=16, **alignment)
-        pylab.text(x3, y3+1.2*r, names[2], fontsize=16, **alignment)
-
-    leg = ax.legend(names, loc='best', fancybox=True)
-    leg.get_frame().set_alpha(0.5)
-
-    if show_plot:
-        pylab.show()
-
-#--------------------------------------------------------------------
-def venn2(data=None, names=None, fill="number", show_names=True, show_plot=True, **kwds):
-
-    if (data is None) or len(data) != 2:
-        raise Exception("length of data should be 2!")
-    if (names is None) or (len(names) != 2):
-        names = ("set 1", "set 2")
-
-    labels = get_labels(data, fill=fill)
-
-    r, x1, y1, x2, y2 = 2.0, 3.0, 4.0, 5.0, 4.0
-
-    fig = pylab.figure(figsize=(8,8))
-    ax = fig.gca(); ax.set_aspect("equal")
-    ax.set_xticks([]); ax.set_yticks([]);
-    ax.set_xlim(0, 8); ax.set_ylim(0, 8)
-
-    c1 = pylab.Circle((x1,y1), radius=r, alpha=0.5, color="red")
-    c2 = pylab.Circle((x2,y2), radius=r, alpha=0.5, color="green")
-
-    ax.add_patch(c1)
-    ax.add_patch(c2)
-
-    ## draw text
-    #1
-    pylab.text(x1-r/2, y1, labels['10'], **alignment)
-    pylab.text(x2+r/2, y2, labels['01'], **alignment)
-    # 2
-    pylab.text((x1+x2)/2, y1, labels['11'], **alignment)
-    # names of different groups
-    if show_names:
-        pylab.text(x1, y1-1.2*r, names[0], fontsize=16, **alignment)
-        pylab.text(x2, y2-1.2*r, names[1], fontsize=16, **alignment)
-
-    leg = ax.legend(names, loc='best', fancybox=True)
-    leg.get_frame().set_alpha(0.5)
-
-    if show_plot:
-        pylab.show()
-
-#--------------------------------------------------------------------
-if __name__ == '__main__':
     # venn3()
     venn([range(10), range(5,15), range(3,8)], ["aaaa", "bbbb", "cccc"], fill="both", show_names=False)
     # venn2()
-    venn([range(10), range(5,15)], ["aaaa", "bbbb"], a=2, b=3, c=4)
-    venn([range(10), range(5,15)], ["aaaa", "bbbb"], fill="logic", a=2, b=3, c=4, show_names=False)
+    venn([range(10), range(5,15)])
+    venn([range(10), range(5,15)], ["aaaa", "bbbb"], fill="logic", show_names=False)
     # venn4()
-    venn([range(10), range(5,15), range(3,8), range(4,9)], ["aaaa", "bbbb", "cccc", "ddd"])
+    venn([range(10), range(5,15), range(3,8), range(4,9)], ["aaaa", "bbbb", "cccc", "dddd"], figsize=(12,12))
+
+#--------------------------------------------------------------------
+if __name__ == '__main__':
+    test()
